@@ -1,0 +1,2 @@
+opencv-python
+websockets>=12
