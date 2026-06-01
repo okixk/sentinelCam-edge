@@ -31,6 +31,41 @@ The client requests MJPG capture (so USB cams hit 720p/1080p at speed), keeps
 only the freshest frame (`CAP_PROP_BUFFERSIZE=1`), reconnects with exponential
 backoff on a dropped link, and releases the camera cleanly on exit.
 
+### 1080p @ 30 fps
+
+Resolution and framerate are set on the **source** (here), not on the worker:
+
+```powershell
+$env:SC_WIDTH = "1920"; $env:SC_HEIGHT = "1080"; $env:SC_FPS = "30"
+```
+
+(The camera must support 1080p30; with MJPG most USB cams do.)
+
+### Direct over the VPN (bypass Cloudflare)
+
+Cloudflare is unreliable for sustained high-throughput WebSockets and will
+"keepalive ping timeout" / drop the stream. For a stable feed, connect the
+camera **directly to the origin over the VPN** instead of through Cloudflare:
+
+1. Connect the WireGuard VPN (so the web server's bridge IP is reachable).
+2. Map the hostname to that IP in your hosts file
+   (`C:\Windows\System32\drivers\etc\hosts`, as admin):
+   ```
+   172.30.0.10   sentinelcam.ch
+   ```
+   `172.30.0.10` is the Traefik bridge IP for VPN clients; use the web host's
+   LAN IP instead if you are on the same network.
+3. Run with verification off (the Cloudflare Origin cert isn't trusted off-CF;
+   the WireGuard tunnel already secures the link):
+   ```powershell
+   $env:SC_WEB_URL = "wss://sentinelcam.ch"   # name kept so Traefik routes correctly
+   $env:SC_INSECURE = "1"
+   ```
+
+The hosts entry affects the whole machine, so this laptop's **browser** would
+also bypass Cloudflare and show a cert warning — view the web UI from another
+device (normal `https://sentinelcam.ch`) or install the Cloudflare Origin CA.
+
 ### Ingest contract
 
 The wire contract the web server expects (see `sentinelCam-web` →
