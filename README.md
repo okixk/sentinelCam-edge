@@ -1,10 +1,47 @@
 # sentinelCam Edge
 
-`sentinelCam-edge` is the planned camera-side component of the sentinelCam stack.
+`sentinelCam-edge` is the camera-side component of the sentinelCam stack.
 
-This repo is intended for lightweight edge devices such as Raspberry Pi systems or small camera-adjacent nodes. Its job will be to capture or forward a video source and hand it off to [`sentinelCam-worker`](https://github.com/okixk/sentinelCam-worker), where the actual AI inference happens.
+It is intended for lightweight edge devices such as Raspberry Pi systems or small camera-adjacent nodes. Its job is to capture a video source and push it to the **sentinelCam-web** server, which forwards frames to a worker for AI inference and relays the processed result back to browsers. The edge node never talks to the worker directly.
 
-> This repository is currently a placeholder and does not contain the implementation yet.
+## Reference client: `laptop-streamer/`
+
+`laptop-streamer/laptop_streamer.py` is the reference edge client. It captures a local webcam and streams JPEG frames over a WebSocket to `sentinelCam-web` at `/api/ingest/<cam_id>`.
+
+It is configured entirely via environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SC_WEB_URL` | — (required) | `wss://host` of the web server |
+| `SC_CAM_ID` | — (required) | camera id issued by the web admin |
+| `SC_CAM_TOKEN` | — (required) | `sc-cam-<id>-<secret>` bearer token |
+| `SC_DEVICE` | `0` | camera index |
+| `SC_FPS` | `15` | target send framerate |
+| `SC_JPEG_QUALITY` | `80` | JPEG quality (1–100) |
+| `SC_WIDTH` / `SC_HEIGHT` | `1280` / `720` | capture resolution |
+| `SC_INSECURE` | `0` | set `1` to skip TLS verification (local testing only) |
+
+```bash
+pip install -r laptop-streamer/requirements.txt
+SC_WEB_URL=wss://sentinelcam.ch SC_CAM_ID=1 SC_CAM_TOKEN=sc-cam-1-... \
+  python laptop-streamer/laptop_streamer.py
+```
+
+The client requests MJPG capture (so USB cams hit 720p/1080p at speed), keeps
+only the freshest frame (`CAP_PROP_BUFFERSIZE=1`), reconnects with exponential
+backoff on a dropped link, and releases the camera cleanly on exit.
+
+### Ingest contract
+
+The wire contract the web server expects (see `sentinelCam-web` →
+`app/streaming/routes.py` and `app/streaming/protocol.py`):
+
+- WebSocket to `wss://<web>/api/ingest/<cam_id>` with header
+  `Authorization: Bearer <SC_CAM_TOKEN>`.
+- Each message is one raw JPEG frame (binary), ≤ 4 MiB, starting with the
+  JPEG magic `FF D8 FF`.
+
+A Raspberry Pi client should implement the same contract.
 
 ## Planned purpose
 
