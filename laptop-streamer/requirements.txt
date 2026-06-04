@@ -1,2 +1,9 @@
 opencv-python>=4.10
-websockets>=12
+# >=14 required: laptop_streamer.py passes additional_headers= (renamed from
+# extra_headers); on 12.x/13.x the legacy client TypeErrors at connect time.
+websockets>=14
+# Static ffmpeg fallback for laptops in SC_CODEC=h264 mode. Deliberately NOT
+# installed on the Pi (aarch64/armv7l): the bundled build cannot use the
+# VideoCore hardware encoder — install the system one there instead:
+#   sudo apt install ffmpeg
+imageio-ffmpeg>=0.4.7; platform_machine in "x86_64 AMD64 arm64"

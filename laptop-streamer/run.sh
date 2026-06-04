@@ -10,9 +10,23 @@ export SC_CAM_TOKEN="sc-cam-3-62f6d31fe42ea869de8758d588ecb71f"
 
 # Optional knobs:
 export SC_DEVICE="0"
-export SC_FPS="60"
-export SC_JPEG_QUALITY="100"
 export SC_INSECURE="1"
+
+# --- H.264 mode: 1080p30 at ~4.5 Mbit/s (vs ~40-80 Mbit/s as MJPEG). ---
+# Needs ffmpeg (sudo apt install ffmpeg). On a Pi 0-4 the VideoCore hardware
+# encoder is auto-selected. Falls back to JPEG mode if ffmpeg is missing.
+export SC_CODEC="h264"
+export SC_WIDTH="1920"
+export SC_HEIGHT="1080"
+export SC_FPS="30"
+export SC_H264_BITRATE_KBPS="4500"
+export SC_H264_GOP_SECONDS="1.0"
+# Low-fps JPEG sidecar keeps YOLO detection + auto-recording alive (0 = off):
+export SC_SIDECAR_FPS="2"
+
+# --- JPEG mode fallback (SC_CODEC="jpeg"): keep fps*quality modest — ---
+# 15fps/q80@720p is ~10-15 Mbit/s; more starves a home VPN uplink.
+export SC_JPEG_QUALITY="80"
 # ----------------------------------------------------------------------
 
 cd "$(dirname "$0")"

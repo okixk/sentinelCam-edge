@@ -10,9 +10,23 @@ set "SC_CAM_TOKEN=sc-cam-3-62f6d31fe42ea869de8758d588ecb71f"
 
 REM Optional knobs:
 set "SC_DEVICE=0"
-set "SC_FPS=60"
-set "SC_JPEG_QUALITY=100"
 set "SC_INSECURE=1"
+
+REM --- H.264 mode: 1080p30 at ~4.5 Mbit/s (vs ~40-80 Mbit/s as MJPEG). ---
+REM ffmpeg comes bundled via imageio-ffmpeg (requirements.txt); on Windows
+REM laptops the software encoder (libx264) is used. Set SC_CODEC=jpeg to revert.
+set "SC_CODEC=h264"
+set "SC_WIDTH=1920"
+set "SC_HEIGHT=1080"
+set "SC_FPS=30"
+set "SC_H264_BITRATE_KBPS=4500"
+set "SC_H264_GOP_SECONDS=1.0"
+REM Low-fps JPEG sidecar keeps YOLO detection + auto-recording alive (0 = off):
+set "SC_SIDECAR_FPS=2"
+
+REM --- JPEG mode fallback (SC_CODEC=jpeg): keep fps*quality modest — ---
+REM 15fps/q80@720p is ~10-15 Mbit/s; more starves a home VPN uplink.
+set "SC_JPEG_QUALITY=80"
 REM ----------------------------------------------------------------------
 
 cd /d "%~dp0"

@@ -73,10 +73,37 @@ The wire contract the web server expects (see `sentinelCam-web` →
 
 - WebSocket to `wss://<web>/api/ingest/<cam_id>` with header
   `Authorization: Bearer <SC_CAM_TOKEN>`.
-- Each message is one raw JPEG frame (binary), ≤ 4 MiB, starting with the
-  JPEG magic `FF D8 FF`.
+- Each binary message is ONE of (distinguished by magic bytes on the same
+  socket; the modes may be interleaved):
+  - a raw JPEG frame, ≤ 4 MiB, starting with `FF D8 FF`, or
+  - one H.264 **Annex-B access unit**, ≤ 2 MiB, starting with
+    `00 00 01` / `00 00 00 01`. Every IDR access unit must carry SPS+PPS
+    inline (the splitter in `h264_source.py` guarantees this) and the GOP
+    should be short (1–2 s) so viewers join quickly.
 
-A Raspberry Pi client should implement the same contract.
+### H.264 mode (`SC_CODEC=h264`)
+
+MJPEG needs ~40–80 Mbit/s for 1080p30 — impossible over a home VPN uplink.
+H.264 needs ~4–5 Mbit/s for the same stream. Requirements:
+
+- `ffmpeg`: on the **Pi** install the system one (`sudo apt install ffmpeg` —
+  it is the only build with the VideoCore hardware encoder enabled). On
+  x86/Mac laptops a static ffmpeg is bundled automatically via
+  `imageio-ffmpeg` (requirements.txt). Without any ffmpeg the streamer logs a
+  warning and falls back to JPEG mode.
+- On a Pi 0–4 the VideoCore hardware encoder (`h264_v4l2m2m`, `/dev/video11`)
+  is auto-selected — it is rated for exactly 1080p30 and costs almost no CPU.
+  On a Pi 5 / laptop, `libx264 -preset ultrafast` is used instead.
+- On Linux ffmpeg reads the camera directly (`SC_H264_INPUT=v4l2`, MJPEG from
+  the cam). Cameras with native H.264 output (e.g. Logitech C920) can use
+  `SC_H264_INPUT=v4l2-h264` for zero encode cost.
+- CSI camera modules (libcamera) are not visible to ffmpeg's v4l2 input —
+  use a USB cam for h264 mode for now, or the legacy `bcm2835-v4l2` overlay.
+
+In h264 mode the worker is bypassed for live video (the browser plays the
+camera's own H.264, **without YOLO overlay boxes**). A low-fps JPEG sidecar
+(`SC_SIDECAR_FPS`, default 2) keeps detection, auto-recording and annotated
+snapshots working.
 
 ## Planned purpose
 
