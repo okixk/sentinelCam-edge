@@ -32,6 +32,8 @@ Resilient by design: the camera is opened once and released cleanly on exit,
 and the WebSocket reconnects with exponential backoff so a transient web/worker
 outage does not require relaunching the streamer.
 """
+from __future__ import annotations  # Pi OS Bullseye ships Python 3.9
+
 import asyncio
 import os
 import shutil
@@ -268,13 +270,20 @@ class _H264Source:
             sidecar_height=SIDECAR_HEIGHT, sidecar_fd=sidecar_fd,
             ffmpeg_bin=self.ffmpeg_bin,
         )
-        self._proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE if self.mode == "pipe" else asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            pass_fds=(wfd,) if wfd is not None else (),
-        )
+        try:
+            self._proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE if self.mode == "pipe" else asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                pass_fds=(wfd,) if wfd is not None else (),
+            )
+        except Exception:
+            # Don't leak the sidecar pipe on every failed respawn attempt.
+            for fd in (rfd, wfd):
+                if fd is not None:
+                    os.close(fd)
+            raise
         self._spawned_at = time.monotonic()
         if wfd is not None:
             os.close(wfd)  # child holds the write end now
@@ -324,6 +333,7 @@ class _H264Source:
 
     async def _read_aus(self) -> None:
         splitter = AnnexBSplitter()
+        oversize_seen = 0
         try:
             while True:
                 chunk = await self._proc.stdout.read(65536)
@@ -331,6 +341,12 @@ class _H264Source:
                     break
                 for au, is_kf in splitter.feed(chunk):
                     self._enqueue(au, is_kf)
+                if splitter.dropped_oversize > oversize_seen:
+                    oversize_seen = splitter.dropped_oversize
+                    # The web drops >2MiB AUs silently too — make it visible.
+                    print(f"warning: dropped oversized access unit #{oversize_seen} "
+                          "(>2MiB; lower SC_H264_BITRATE_KBPS or SC_H264_GOP_SECONDS)",
+                          file=sys.stderr)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
